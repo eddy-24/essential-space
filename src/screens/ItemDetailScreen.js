@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet, SafeAreaView, Alert, ScrollView } from 'react-native';
+import { View, TextInput, TouchableOpacity, Text, StyleSheet, SafeAreaView, Alert, ScrollView, Image } from 'react-native';
 import { useStore } from '../store/useStore';
+import { API_HOST } from '../services/api/client';
 import { colors } from '../design/colors';
 import { layout, spacing, radius } from '../design/spacing';
 import { textStyles } from '../design/typography';
@@ -10,6 +11,11 @@ export default function ItemDetailScreen({ route, navigation }) {
   const { updateItem, deleteItem } = useStore();
   const [note, setNote] = useState(item.note || '');
   const [content, setContent] = useState(item.content || '');
+
+  let imageUrl = item.previewImage || item.content;
+  if (item.type === 'IMAGE' && imageUrl && imageUrl.startsWith('/')) {
+    imageUrl = `${API_HOST}${imageUrl}`;
+  }
 
   const handleSave = async () => {
     try {
@@ -67,14 +73,22 @@ export default function ItemDetailScreen({ route, navigation }) {
           {item.isPinned && <Text style={{ fontSize: 16 }}>📌</Text>}
         </View>
 
-        <TextInput
-          style={[textStyles.body, styles.contentInput]}
-          value={content}
-          onChangeText={setContent}
-          multiline
-          placeholder="Content..."
-          placeholderTextColor={colors.text.muted}
-        />
+        {item.type === 'IMAGE' && imageUrl ? (
+          <Image 
+            source={{ uri: imageUrl }} 
+            style={styles.detailImage} 
+            resizeMode="contain" 
+          />
+        ) : (
+          <TextInput
+            style={[textStyles.body, styles.contentInput]}
+            value={content}
+            onChangeText={setContent}
+            multiline
+            placeholder="Content..."
+            placeholderTextColor={colors.text.muted}
+          />
+        )}
 
         <View style={styles.noteSection}>
           <Text style={[textStyles.mono_sm, styles.sectionTitle]}>Note:</Text>
@@ -142,6 +156,12 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: spacing.xl,
     padding: 0,
+  },
+  detailImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: radius.md,
+    marginBottom: spacing.xl,
   },
   noteSection: {
     marginBottom: spacing.xl,
