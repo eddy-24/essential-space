@@ -11,6 +11,22 @@ const parseItemDates = (item) => {
 };
 
 export const itemsApi = {
+  // GET /api/items/{id}
+  getItem: async (id) => {
+    const response = await apiClient.get(`/items/${id}`);
+    return parseItemDates(response);
+  },
+
+  // GET /api/links/by-domain
+  getLinksByDomain: async () => {
+    const response = await apiClient.get('/links/by-domain');
+    // Map items inside the domain groupings to parse dates
+    return response.map(group => ({
+      ...group,
+      items: group.items.map(parseItemDates)
+    }));
+  },
+
   // GET /api/items
   getAllItems: async (filters) => {
     const response = await apiClient.get('/items', { params: filters });
