@@ -1,216 +1,64 @@
 import React, { useState, useCallback } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  FlatList, 
-  TouchableOpacity, 
-  ActivityIndicator,
-  SafeAreaView
-} from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { itemsApi } from '../services/api/itemsApi';
-import { colors } from '../design/colors';
-import { spacing, radius, layout } from '../design/spacing';
 
-const NoteCard = ({ item, onPress }) => {
-  const tags = item.aiTags || [];
-  
-  // A simple text preview fallback. If we have blocks, we could extract text.
-  const previewText = item.content || (item.richContent?.blocks?.[0]?.text) || 'No content';
-
-  return (
-    <TouchableOpacity style={styles.card} activeOpacity={0.8} onPress={() => onPress(item)}>
-      <View style={styles.cardHeader}>
-        <Text style={styles.cardTitle} numberOfLines={1}>
-          {item.title || 'Untitled Note'}
-        </Text>
-        {item.linkedItemId && (
-          <View style={styles.linkBadge}>
-            <Text style={styles.linkBadgeText}>🔗 Linked</Text>
-          </View>
-        )}
-      </View>
-      
-      <Text style={styles.previewText} numberOfLines={2}>
-        {previewText}
-      </Text>
-
-      {tags.length > 0 && (
-        <View style={styles.tagsContainer}>
-          {tags.map((tag, idx) => (
-            <View key={idx} style={styles.tagChip}>
-              <Text style={styles.tagText}>{tag}</Text>
-            </View>
-          ))}
-        </View>
-      )}
-    </TouchableOpacity>
-  );
-};
-
-const NotesScreen = () => {
+export default function NotesScreen() {
   const [notes, setNotes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const navigation = useNavigation();
+  const nav = useNavigation();
 
-  const fetchNotes = async () => {
-    try {
-      setLoading(true);
-      const data = await itemsApi.getAllItems({ type: 'NOTE' });
-      // Sort by createdAt desc
-      const sorted = data.sort((a, b) => {
-        if (!a.createdAt || !b.createdAt) return 0;
-        return b.createdAt.getTime() - a.createdAt.getTime();
-      });
-      setNotes(sorted);
-    } catch (error) {
-      console.error('Failed to fetch notes', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useFocusEffect(
-    useCallback(() => {
-      fetchNotes();
-    }, [])
-  );
-
-  const handlePressNote = (item) => {
-    navigation.navigate('NoteEditor', { noteId: item.id });
-  };
-
-  const handleCreateNote = () => {
-    navigation.navigate('NoteEditor');
-  };
+  useFocusEffect(useCallback(() => {
+    itemsApi.getAllItems({ type: 'NOTE' }).then(data => {
+      setNotes(data.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
+    }).catch(() => {});
+  }, []));
 
   return (
     <SafeAreaView style={styles.screen}>
-      {loading ? (
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={colors.accent.primary} />
-        </View>
-      ) : (
-        <FlatList
-          data={notes}
-          keyExtractor={(item) => item.id.toString()}
-          renderItem={({ item }) => <NoteCard item={item} onPress={handlePressNote} />}
-          contentContainerStyle={styles.listContent}
-          ListEmptyComponent={
-            <View style={styles.emptyContainer}>
-              <Text style={styles.emptyText}>No notes found. Create one!</Text>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>notes</Text>
+      </View>
+      <FlatList
+        data={notes}
+        keyExtractor={i => i.id.toString()}
+        contentContainerStyle={styles.list}
+        renderItem={({item}) => (
+          <TouchableOpacity style={styles.card} onPress={() => nav.navigate('NoteEditor', { noteId: item.id })}>
+            <View style={styles.cardHeader}>
+              <Text style={styles.cardTitle} numberOfLines={1}>{item.title || 'Untitled Note'}</Text>
+              {item.linkedItemId && <View style={styles.attachDot} />}
             </View>
-          }
-        />
-      )}
-
-      {/* FAB */}
-      <TouchableOpacity style={styles.fab} activeOpacity={0.9} onPress={handleCreateNote}>
+            <Text style={styles.previewText} numberOfLines={2}>{item.content || '...'}</Text>
+            <View style={styles.tagsContainer}>
+              {(item.aiTags || []).map((t, i) => (
+                <View key={i} style={styles.dashedChip}>
+                  <Text style={styles.dashedChipText}>{t}</Text>
+                </View>
+              ))}
+            </View>
+          </TouchableOpacity>
+        )}
+      />
+      <TouchableOpacity style={styles.fab} onPress={() => nav.navigate('NoteEditor')}>
         <Text style={styles.fabIcon}>+</Text>
       </TouchableOpacity>
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: colors.bg.primary,
-  },
-  center: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  listContent: {
-    padding: spacing.md,
-    paddingBottom: 100, // Make room for FAB
-  },
-  card: {
-    backgroundColor: colors.bg.secondary,
-    padding: spacing.md,
-    borderRadius: radius.md,
-    marginBottom: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.border.subtle,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.xs,
-  },
-  cardTitle: {
-    color: colors.text.primary,
-    fontSize: 16,
-    fontWeight: '700',
-    flex: 1,
-  },
-  linkBadge: {
-    backgroundColor: colors.bg.tertiary,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: radius.sm,
-    marginLeft: spacing.sm,
-  },
-  linkBadgeText: {
-    color: colors.text.secondary,
-    fontSize: 10,
-  },
-  previewText: {
-    color: colors.text.secondary,
-    fontSize: 14,
-    lineHeight: 20,
-    marginBottom: spacing.sm,
-  },
-  tagsContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-  },
-  tagChip: {
-    backgroundColor: colors.bg.tertiary,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: radius.full,
-    borderWidth: 1,
-    borderColor: colors.border.default,
-  },
-  tagText: {
-    color: colors.text.muted, // Grey/Hint color as requested
-    fontSize: 11,
-    fontWeight: '500',
-  },
-  emptyContainer: {
-    padding: spacing.xl,
-    alignItems: 'center',
-  },
-  emptyText: {
-    color: colors.text.muted,
-  },
-  fab: {
-    position: 'absolute',
-    bottom: layout.fabOffset,
-    right: layout.fabOffset,
-    width: layout.fabSize,
-    height: layout.fabSize,
-    borderRadius: layout.fabSize / 2,
-    backgroundColor: colors.accent.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 5,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-  },
-  fabIcon: {
-    color: colors.text.inverse,
-    fontSize: 28,
-    fontWeight: '400',
-    marginTop: -2,
-  },
+  screen: { flex: 1, backgroundColor: '#0a0a0a' },
+  header: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#1e1e1e' },
+  headerTitle: { fontFamily: 'DM Mono', fontSize: 11, color: '#f0f0f0' },
+  list: { padding: 16, paddingBottom: 80 },
+  card: { backgroundColor: '#141414', padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#1e1e1e' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  cardTitle: { fontFamily: 'DM Sans', fontSize: 12, color: '#e0e0e0', flex: 1 },
+  attachDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#c080e0' },
+  previewText: { fontFamily: 'DM Sans', fontSize: 10, color: '#555', marginBottom: 8, lineHeight: 14 },
+  tagsContainer: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
+  dashedChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 0.5, borderColor: '#333', borderStyle: 'dashed' },
+  dashedChipText: { fontFamily: 'DM Mono', fontSize: 8, color: '#444' },
+  fab: { position: 'absolute', bottom: 24, right: 24, width: 28, height: 28, borderRadius: 14, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
+  fabIcon: { fontSize: 18, color: '#0a0a0a', marginTop: -2 }
 });
-
-export default NotesScreen;
