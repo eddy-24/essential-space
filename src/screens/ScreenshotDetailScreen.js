@@ -45,13 +45,7 @@ const ScreenshotDetailScreen = () => {
   const badgeColor = categoryColors[category] || categoryColors.OTHER;
 
   const handleAddNote = () => {
-    // Navigate to NoteEditorScreen with linkedItemId
-    // Using a different tab requires navigation routing structure access. 
-    // Usually handled by navigating to the Notes stack.
-    navigation.navigate('Notes', {
-      screen: 'NoteEditor',
-      params: { linkedItemId: item.id }
-    });
+    navigation.navigate('NoteEditor', { linkedItemId: item.id });
   };
 
   return (

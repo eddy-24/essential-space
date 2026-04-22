@@ -1,24 +1,29 @@
-// src/design/spacing.js
 export const spacing = {
-  xs:  4,
-  sm:  8,
-  md:  16,
-  lg:  24,
-  xl:  32,
-  xxl: 48,
+  xs:   4,
+  sm:   8,
+  md:   12,
+  lg:   16,
+  xl:   20,
+  xxl:  24,
+  xxxl: 32,
 };
 
 export const radius = {
-  sm:  4,
-  md:  8,
-  lg:  16,
+  sm:   6,
+  md:   10,
+  lg:   14,
+  xl:   16,
+  pill: 32,
   full: 999,
 };
 
 export const layout = {
-  screenPadding: 16,
-  cardPadding:   16,
-  cardGap:       8,      // spațiu între carduri în inbox
-  fabSize:       56,     // Quick Capture FAB
-  fabOffset:     24,     // distanța de la marginea ecranului
+  screenPaddingH: 20,
+  screenPaddingTop: 20,
+  screenPaddingBottom: 32,
+  cardPaddingV: 14,
+  cardPaddingH: 16,
+  cardGap: 8,
+  fabSize: 44,
+  bottomBarBottom: 18,
 };

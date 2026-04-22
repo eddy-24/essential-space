@@ -1,15 +1,16 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet } from 'react-native';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { RootNavigator } from './src/navigation/index';
 
 export default function App() {
   return (
-    <View style={styles.root}>
+    <SafeAreaProvider style={styles.root}>
       <RootNavigator />
-    </View>
+    </SafeAreaProvider>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1 }
+  root: { flex: 1 },
 });

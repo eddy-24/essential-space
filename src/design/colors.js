@@ -1,41 +1,65 @@
-// src/design/colors.js
+export const C = {
+  bg:          '#0D0C0B',
+  card:        '#131211',
+  elevated:    '#1A1917',
+  pillNav:     'rgba(20,19,18,0.92)',
+
+  textPrimary: '#F0EDE8',
+  textSec:     '#D4D0CA',
+  textBody:    '#7A7570',
+  textMuted:   '#5A5754',
+  textDim:     '#4A4744',
+  textDarker:  '#3A3835',
+  textDark:    '#2E2C2A',
+  textGhost:   '#2A2825',
+
+  borderSubtle:  '#1C1B19',
+  borderDefault: '#1E1D1B',
+  borderMedium:  '#242220',
+  borderStrong:  '#2A2826',
+
+  typeImage: '#BF5AF2',
+  typeLink:  '#64D2FF',
+  typeNote:  '#F0EDE8',
+  typeFile:  '#FF9F0A',
+
+  danger:  '#FF3B30',
+  success: '#30D158',
+};
+
+// Legacy alias so existing imports keep working
 export const colors = {
-  // Backgrounds
   bg: {
-    primary:   '#0A0A0A',  // fundal principal (aproape negru)
-    secondary: '#141414',  // card background
-    tertiary:  '#1E1E1E',  // input, elevated elements
-    overlay:   '#000000CC', // modal overlay
+    primary:   C.bg,
+    secondary: C.card,
+    tertiary:  C.elevated,
+    overlay:   'rgba(0,0,0,0.65)',
   },
-
-  // Text
   text: {
-    primary:   '#F5F5F5',  // text principal
-    secondary: '#888888',  // text secundar, metadate
-    muted:     '#444444',  // placeholder, disabled
-    inverse:   '#0A0A0A',  // text pe background deschis
+    primary:   C.textPrimary,
+    secondary: C.textSec,
+    muted:     C.textDim,
+    inverse:   C.bg,
   },
-
-  // Accent — Nothing OS foloseste alb/rosu, noi mergem pe alb pur
   accent: {
-    primary:   '#FFFFFF',  // accente principale
-    danger:    '#FF3B30',  // delete, destructive actions
-    success:   '#30D158',  // confirm, saved
-    link:      '#64D2FF',  // link type indicator
+    primary: C.textPrimary,
+    danger:  C.danger,
+    success: C.success,
+    link:    C.typeLink,
   },
-
-  // Type indicators (colored dots per item type)
   type: {
-    text:  '#FFFFFF',
-    link:  '#64D2FF',
-    image: '#BF5AF2',
-    file:  '#FF9F0A',
+    text:      C.typeNote,
+    link:      C.typeLink,
+    image:     C.typeImage,
+    file:      C.typeFile,
+    SCREENSHOT: C.typeImage,
+    LINK:       C.typeLink,
+    NOTE:       C.typeNote,
+    FILE:       C.typeFile,
   },
-
-  // Border
   border: {
-    subtle:  '#1E1E1E',
-    default: '#2C2C2C',
-    strong:  '#444444',
+    subtle:  C.borderSubtle,
+    default: C.borderDefault,
+    strong:  C.borderStrong,
   },
 };

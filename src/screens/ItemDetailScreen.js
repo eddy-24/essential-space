@@ -1,221 +1,367 @@
-import React, { useState } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet, SafeAreaView, Alert, ScrollView, Image } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import {
+  View, Text, TouchableOpacity, StyleSheet,
+  ScrollView, Image, Alert, ActivityIndicator,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import Svg, { Defs, LinearGradient, Stop, Rect } from 'react-native-svg';
+import { C } from '../design/colors';
+import { DotGrid } from '../components/DotGrid';
+import { IcBack } from '../components/Icons';
 import { useStore } from '../store/useStore';
 import { API_HOST } from '../services/api/client';
-import { colors } from '../design/colors';
-import { layout, spacing, radius } from '../design/spacing';
-import { textStyles } from '../design/typography';
+import { itemsApi } from '../services/api/itemsApi';
+
+const BADGE_COLOR = {
+  event:    { color: '#5ab4f0', bg: 'rgba(90,180,240,0.1)' },
+  wishlist: { color: '#c080e0', bg: 'rgba(192,128,224,0.1)' },
+  date:     { color: '#e0b060', bg: 'rgba(224,176,96,0.1)' },
+  note:     { color: '#60c080', bg: 'rgba(96,192,128,0.1)' },
+  link:     { color: C.typeLink, bg: 'rgba(100,210,255,0.1)' },
+};
+
+const TYPE_LABEL = {
+  SCREENSHOT: 'image',
+  LINK: 'link',
+  NOTE: 'note',
+  FILE: 'file',
+};
+
+const TYPE_COLOR = {
+  SCREENSHOT: C.typeImage,
+  LINK:       C.typeLink,
+  NOTE:       C.typeNote,
+  FILE:       C.typeFile,
+};
+
+const Block = ({ label, children }) => (
+  <View style={s.block}>
+    <Text style={s.blockLabel}>{label}</Text>
+    {children}
+  </View>
+);
 
 export default function ItemDetailScreen({ route, navigation }) {
   const { item } = route.params;
-  const { updateItem, deleteItem } = useStore();
-  const [note, setNote] = useState(item.note || '');
-  const [content, setContent] = useState(item.content || '');
+  const { deleteItem } = useStore();
+  const [currentItem, setCurrentItem] = useState(item);
+  const [loading, setLoading] = useState(Boolean(item?.id));
 
-  let imageUrl = item.previewImage || item.content;
-  if (item.type === 'IMAGE' && imageUrl && imageUrl.startsWith('/')) {
-    imageUrl = `${API_HOST}${imageUrl}`;
-  }
+  useEffect(() => {
+    if (!item?.id) return;
+    itemsApi.getItem(item.id)
+      .then(setCurrentItem)
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [item?.id]);
 
-  const handleSave = async () => {
-    try {
-      await updateItem(item.id, { note, content });
-      navigation.goBack();
-    } catch (err) {
-      Alert.alert('Error', 'Failed to update item');
-    }
-  };
+  const detailItem = currentItem || item;
+  const typeLabel = TYPE_LABEL[detailItem.type] || detailItem.type?.toLowerCase() || 'item';
+  const typeColor = TYPE_COLOR[detailItem.type] || C.typeNote;
+
+  let imageUrl = detailItem.previewImage || detailItem.content;
+  if (imageUrl && imageUrl.startsWith('/')) imageUrl = `${API_HOST}${imageUrl}`;
+  const showImage = detailItem.type === 'SCREENSHOT' && imageUrl;
+
+  const detailText = [
+    detailItem.note,
+    detailItem.aiSummary,
+    detailItem.ocrText,
+  ].filter(Boolean).join('\n\n');
+
+  const metadata = [
+    { label: 'created', value: detailItem.createdAt ? new Date(detailItem.createdAt).toLocaleString('ro-RO') : null },
+    { label: 'domain', value: detailItem.domain },
+    { label: 'file', value: detailItem.fileName },
+    { label: 'size', value: detailItem.fileSize ? `${detailItem.fileSize} bytes` : null },
+  ].filter(entry => entry.value);
 
   const handleDelete = () => {
-    Alert.alert('Delete Item', 'Are you sure?', [
+    Alert.alert('Delete', 'Are you sure?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
         style: 'destructive',
         onPress: async () => {
-          await deleteItem(item.id);
-          navigation.navigate('Inbox');
+          await deleteItem(detailItem.id);
+          navigation.goBack();
         },
       },
     ]);
   };
 
-  const handleMore = () => {
-    Alert.alert('Options', null, [
-      { text: item.isPinned ? 'Unpin' : 'Pin', onPress: () => updateItem(item.id, { isPinned: !item.isPinned }) },
-      { text: 'Add to Collection', onPress: () => {} },
-      { text: 'Delete', style: 'destructive', onPress: handleDelete },
-      { text: 'Cancel', style: 'cancel' },
-    ]);
-  };
-
-  const formatDate = (date) => {
-    if (!date) return '';
-    return new Date(date).toLocaleString();
-  };
-
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.iconButton}>
-          <Text style={{ fontSize: 24, color: colors.text.primary }}>←</Text>
+    <View style={s.screen}>
+      <DotGrid />
+
+      <SafeAreaView style={s.header}>
+        <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()}>
+          <IcBack />
+          <Text style={s.backText}>back</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={handleMore} style={styles.iconButton}>
-          <Text style={{ fontSize: 24, color: colors.text.primary }}>⋯</Text>
-        </TouchableOpacity>
-      </View>
+        <Text style={[s.typeTag, { color: typeColor }]}>{typeLabel}</Text>
+      </SafeAreaView>
 
-      <ScrollView contentContainerStyle={styles.contentContainer}>
-        <View style={styles.metaRow}>
-          <Text style={textStyles.mono_sm}>
-            {item.type} · {formatDate(item.createdAt)}
-          </Text>
-          {item.isPinned && <Text style={{ fontSize: 16 }}>📌</Text>}
-        </View>
-
-        {item.type === 'IMAGE' && imageUrl ? (
-          <Image 
-            source={{ uri: imageUrl }} 
-            style={styles.detailImage} 
-            resizeMode="contain" 
-          />
-        ) : (
-          <TextInput
-            style={[textStyles.body, styles.contentInput]}
-            value={content}
-            onChangeText={setContent}
-            multiline
-            placeholder="Content..."
-            placeholderTextColor={colors.text.muted}
-          />
-        )}
-
-        <View style={styles.noteSection}>
-          <Text style={[textStyles.mono_sm, styles.sectionTitle]}>Note:</Text>
-          <TextInput
-            style={[textStyles.body, styles.noteInput]}
-            value={note}
-            onChangeText={setNote}
-            multiline
-            placeholder="Add a note..."
-            placeholderTextColor={colors.text.muted}
-          />
-        </View>
-
-        <View style={styles.collectionsSection}>
-          <Text style={[textStyles.mono_sm, styles.sectionTitle]}>Collections:</Text>
-          <View style={styles.tagsContainer}>
-            {item.collections?.map((c) => (
-              <View key={c.id} style={styles.tag}>
-                <Text style={textStyles.mono_sm}>
-                  {c.icon} {c.name}
-                </Text>
-              </View>
-            ))}
-            <TouchableOpacity style={styles.addTagButton}>
-              <Text style={textStyles.mono_sm}>+</Text>
-            </TouchableOpacity>
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={s.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {loading && (
+          <View style={s.loadingBox}>
+            <ActivityIndicator color={C.textPrimary} />
+            <Text style={s.loadingText}>sincronizez itemul cu backend-ul...</Text>
           </View>
-        </View>
-
-        {(note !== (item.note || '') || content !== (item.content || '')) && (
-          <TouchableOpacity style={styles.saveButton} onPress={handleSave}>
-            <Text style={styles.saveButtonText}>Save Changes</Text>
-          </TouchableOpacity>
         )}
+
+        {showImage && (
+          <View style={s.hero}>
+            <Image source={{ uri: imageUrl }} style={s.heroImage} resizeMode="cover" />
+            <View style={StyleSheet.absoluteFillObject}>
+              <Svg width="100%" height="100%">
+                <Defs>
+                  <LinearGradient id="heroFade" x1="0" y1="0" x2="0" y2="1">
+                    <Stop offset="0.4" stopColor={C.bg} stopOpacity="0" />
+                    <Stop offset="1" stopColor={C.bg} stopOpacity="1" />
+                  </LinearGradient>
+                </Defs>
+                <Rect width="100%" height="100%" fill="url(#heroFade)" />
+              </Svg>
+            </View>
+          </View>
+        )}
+
+        {detailItem.aiCategory && (() => {
+          const badgeKey = detailItem.aiCategory.toLowerCase();
+          const badge = BADGE_COLOR[badgeKey];
+          return (
+            <View style={[s.badgePill, { backgroundColor: badge?.bg ?? 'rgba(240,237,230,0.06)' }]}>
+              <Text style={[s.badgePillText, { color: badge?.color ?? C.textDim }]}>
+                {badgeKey}
+              </Text>
+            </View>
+          );
+        })()}
+
+        <Text style={s.mainTitle}>{detailItem.title || 'Untitled'}</Text>
+
+        {(detailItem.content || detailItem.url) && (
+          <Text style={s.summary}>{detailItem.content || detailItem.url}</Text>
+        )}
+
+        {detailText && (
+          <Block label="details">
+            <Text style={s.blockText}>{detailText}</Text>
+          </Block>
+        )}
+
+        {metadata.length > 0 && (
+          <Block label="metadata">
+            <View style={s.metaList}>
+              {metadata.map(entry => (
+                <View key={entry.label} style={s.metaRow}>
+                  <Text style={s.metaKey}>{entry.label}</Text>
+                  <Text style={s.metaValue}>{entry.value}</Text>
+                </View>
+              ))}
+            </View>
+          </Block>
+        )}
+
+        {detailItem.richContent?.blocks?.length > 0 && (
+          <Block label="rich content">
+            <Text style={s.blockText}>
+              {detailItem.richContent.blocks
+                .map(block => block?.text)
+                .filter(Boolean)
+                .join('\n')}
+            </Text>
+          </Block>
+        )}
+
+        {(detailItem.aiTags?.length > 0 || detailItem.tags?.length > 0) && (
+          <Block label="tags">
+            <View style={s.tagsRow}>
+              {[...(detailItem.aiTags || []), ...(detailItem.tags || [])].map((t, i) => (
+                <View key={`${t}-${i}`} style={s.tagChip}>
+                  <Text style={s.tagChipText}>{t}</Text>
+                </View>
+              ))}
+            </View>
+          </Block>
+        )}
+
+        <TouchableOpacity style={s.actionBtn} onPress={handleDelete}>
+          <Text style={[s.actionBtnText, { color: C.danger }]}>delete item</Text>
+        </TouchableOpacity>
+
+        <View style={s.footerGap} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
+const s = StyleSheet.create({
+  screen: {
     flex: 1,
-    backgroundColor: colors.bg.primary,
+    backgroundColor: C.bg,
   },
   header: {
     flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: layout.screenPadding,
-    paddingVertical: spacing.md,
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    zIndex: 10,
   },
-  iconButton: {
-    padding: spacing.xs,
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
   },
-  contentContainer: {
-    padding: layout.screenPadding,
+  backText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 10,
+    color: C.textMuted,
+  },
+  typeTag: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 9,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: 22, paddingBottom: 48 },
+  loadingBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.borderMedium,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 18,
+  },
+  loadingText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 10,
+    color: C.textSec,
+  },
+  hero: {
+    width: '100%',
+    height: 200,
+    borderRadius: 18,
+    overflow: 'hidden',
+    marginBottom: 20,
+    backgroundColor: C.elevated,
+  },
+  heroImage: {
+    width: '100%',
+    height: '100%',
+  },
+  badgePill: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+    marginBottom: 12,
+  },
+  badgePillText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 9,
+    letterSpacing: 0.8,
+  },
+  mainTitle: {
+    fontFamily: 'DMSansMedium',
+    fontSize: 20,
+    color: C.textPrimary,
+    lineHeight: 26,
+    marginBottom: 8,
+    letterSpacing: -0.3,
+  },
+  summary: {
+    fontFamily: 'DMSansRegular',
+    fontSize: 13,
+    color: C.textMuted,
+    lineHeight: 21,
+    marginBottom: 18,
+  },
+  block: {
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.borderMedium,
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 10,
+  },
+  blockLabel: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 8,
+    color: C.textMuted,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 8,
+  },
+  blockText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 11,
+    color: C.textSec,
+    lineHeight: 18,
+  },
+  metaList: {
+    gap: 10,
   },
   metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
+    gap: 4,
   },
-  contentInput: {
-    color: colors.text.primary,
-    fontSize: 18,
-    marginBottom: spacing.xl,
-    padding: 0,
+  metaKey: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 8,
+    color: C.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
   },
-  detailImage: {
-    width: '100%',
-    height: 300,
-    borderRadius: radius.md,
-    marginBottom: spacing.xl,
+  metaValue: {
+    fontFamily: 'DMSansRegular',
+    fontSize: 13,
+    color: C.textPrimary,
+    lineHeight: 18,
   },
-  noteSection: {
-    marginBottom: spacing.xl,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.subtle,
-  },
-  sectionTitle: {
-    color: colors.text.secondary,
-    marginBottom: spacing.sm,
-  },
-  noteInput: {
-    color: colors.text.primary,
-    minHeight: 60,
-    padding: 0,
-  },
-  collectionsSection: {
-    marginBottom: spacing.xl,
-    paddingTop: spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.subtle,
-  },
-  tagsContainer: {
+  tagsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    gap: 5,
   },
-  tag: {
-    backgroundColor: colors.bg.tertiary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
-    marginRight: spacing.sm,
-    marginBottom: spacing.sm,
-  },
-  addTagButton: {
-    backgroundColor: colors.bg.secondary,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.full,
+  tagChip: {
     borderWidth: 1,
-    borderColor: colors.border.subtle,
-    marginRight: spacing.sm,
-    marginBottom: spacing.sm,
-    justifyContent: 'center',
+    borderColor: C.borderMedium,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    backgroundColor: C.elevated,
   },
-  saveButton: {
-    backgroundColor: colors.accent.primary,
-    padding: spacing.md,
-    borderRadius: radius.md,
+  tagChipText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 9,
+    color: C.textSec,
+  },
+  actionBtn: {
+    width: '100%',
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: C.borderMedium,
+    backgroundColor: C.elevated,
     alignItems: 'center',
-    marginTop: spacing.xl,
+    marginTop: 8,
   },
-  saveButtonText: {
-    ...textStyles.mono_md,
-    color: colors.text.inverse,
+  actionBtnText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 11,
+    letterSpacing: 0.4,
   },
+  footerGap: { height: 40 },
 });

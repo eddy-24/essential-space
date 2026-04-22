@@ -1,251 +1,152 @@
-import React, { useState, useImperativeHandle } from 'react';
-import { View, TextInput, TouchableOpacity, Text, StyleSheet, Keyboard, Modal, SafeAreaView } from 'react-native';
-import * as ImagePicker from 'react-native-image-picker';
-import DocumentPicker from 'react-native-document-picker';
-import { useStore } from '../store/useStore';
-import { colors } from '../design/colors';
-import { spacing, radius } from '../design/spacing';
-import { textStyles } from '../design/typography';
+import React, { useEffect, useRef } from 'react';
+import {
+  View, Text, TouchableOpacity, StyleSheet,
+  Animated, Pressable, Easing,
+} from 'react-native';
+import { C } from '../design/colors';
+import { IcCapScreenshot, IcCapLink, IcCapNote, IcCapFile } from './Icons';
 
-export const CaptureSheet = React.forwardRef((props, ref) => {
-  const [visible, setVisible] = useState(false);
-  const [text, setText] = useState('');
-  const [detectedType, setDetectedType] = useState('TEXT');
-  const [selectedFile, setSelectedFile] = useState(null);
-  const { createItem, uploadItem, isLoading } = useStore();
+const SHEET_HEIGHT = 320;
 
-  useImperativeHandle(ref, () => ({
-    expand: () => setVisible(true),
-    close: () => {
-      setVisible(false);
-      resetState();
+export const CaptureSheet = ({ visible, onClose, onNote, onLink, onScreenshot, onFile }) => {
+  const translateY = useRef(new Animated.Value(SHEET_HEIGHT)).current;
+  const overlayOpacity = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (visible) {
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: 0,
+          duration: 380,
+          easing: Easing.bezier(0.32, 0.72, 0, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(overlayOpacity, {
+          toValue: 1,
+          duration: 280,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    } else {
+      Animated.parallel([
+        Animated.timing(translateY, {
+          toValue: SHEET_HEIGHT,
+          duration: 320,
+          easing: Easing.bezier(0.32, 0.72, 0, 1),
+          useNativeDriver: true,
+        }),
+        Animated.timing(overlayOpacity, {
+          toValue: 0,
+          duration: 220,
+          useNativeDriver: true,
+        }),
+      ]).start();
     }
-  }));
+  }, [visible]);
 
-  const resetState = () => {
-    setText('');
-    setDetectedType('TEXT');
-    setSelectedFile(null);
-  };
-
-  const detectType = (input) => {
-    const urlRegex = /^(https?:\/\/)/i;
-    return urlRegex.test(input.trim()) ? 'LINK' : 'TEXT';
-  };
-
-  const handleTextChange = (val) => {
-    setText(val);
-    if (!selectedFile) {
-      setDetectedType(detectType(val));
-    }
-  };
-
-  const handlePickImage = async () => {
-    const result = await ImagePicker.launchImageLibrary({
-      mediaType: 'photo',
-      quality: 0.8,
-    });
-    if (!result.didCancel && result.assets?.length > 0) {
-      const asset = result.assets[0];
-      setSelectedFile({
-        uri: asset.uri,
-        name: asset.fileName || 'photo.jpg',
-        type: asset.type || 'image/jpeg',
-      });
-      setDetectedType('IMAGE');
-    }
-  };
-
-  const handlePickFile = async () => {
-    try {
-      const result = await DocumentPicker.pick({
-        type: [DocumentPicker.types.allFiles],
-      });
-      if (result && result.length > 0) {
-        const file = result[0];
-        setSelectedFile({
-          uri: file.uri,
-          name: file.name,
-          type: file.type,
-        });
-        setDetectedType('FILE');
-      }
-    } catch (err) {
-      if (!DocumentPicker.isCancel(err)) {
-        console.error(err);
-      }
-    }
-  };
-
-  const handleSave = async () => {
-    if (!text.trim() && !selectedFile) return;
-
-    try {
-      if (selectedFile) {
-        await uploadItem(selectedFile, detectedType, text.trim() || undefined);
-      } else {
-        await createItem({
-          type: detectedType,
-          content: text.trim(),
-          note: null,
-        });
-      }
-
-      setVisible(false);
-      resetState();
-    } catch (err) {
-      console.error('Failed to save item', err);
-    }
-  };
+  const BUTTONS = [
+    { label: 'screenshot', Icon: IcCapScreenshot, action: onScreenshot },
+    { label: 'link',       Icon: IcCapLink,       action: onLink },
+    { label: 'note',       Icon: IcCapNote,       action: onNote },
+    { label: 'file',       Icon: IcCapFile,       action: onFile },
+  ];
 
   return (
-    <Modal
-      visible={visible}
-      animationType="slide"
-      transparent={true}
-      onRequestClose={() => {
-        setVisible(false);
-        resetState();
-      }}
-    >
-      <View style={styles.overlay}>
-        <TouchableOpacity 
-          style={styles.backdrop} 
-          activeOpacity={1} 
-          onPress={() => {
-            Keyboard.dismiss();
-            setVisible(false);
-            resetState();
-          }} 
-        />
-        <SafeAreaView style={styles.sheetBackground}>
-          <View style={styles.handleIndicator} />
-          <View style={styles.container}>
-            <TextInput
-              style={styles.input}
-              placeholder="Type anything... (auto-detects links)"
-              placeholderTextColor={colors.text.muted}
-              value={text}
-              onChangeText={handleTextChange}
-              multiline
-            />
+    <>
+      <Animated.View
+        style={[s.overlay, { opacity: overlayOpacity }]}
+        pointerEvents={visible ? 'auto' : 'none'}
+      >
+        <Pressable style={StyleSheet.absoluteFillObject} onPress={onClose} />
+      </Animated.View>
 
-            {selectedFile && (
-              <View style={styles.filePreview}>
-                <Text style={textStyles.mono_sm}>Attached: {selectedFile.name}</Text>
+      <Animated.View style={[s.sheet, { transform: [{ translateY }] }]}>
+        <View style={s.handle} />
+        <Text style={s.label}>quick capture</Text>
+        <View style={s.grid}>
+          {BUTTONS.map(({ label, Icon, action }) => (
+            <TouchableOpacity
+              key={label}
+              style={s.capBtn}
+              activeOpacity={0.75}
+              onPress={() => {
+                onClose();
+                action?.();
+              }}
+            >
+              <View style={s.capIcon}>
+                <Icon />
               </View>
-            )}
-
-            <View style={styles.actionsRow}>
-              <View style={styles.mediaActions}>
-                <TouchableOpacity onPress={handlePickImage} style={styles.iconButton}>
-                  <Text style={{ fontSize: 20 }}>📷</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={handlePickFile} style={styles.iconButton}>
-                  <Text style={{ fontSize: 20 }}>📁</Text>
-                </TouchableOpacity>
-                <View
-                  style={[
-                    styles.typeIndicator,
-                    { backgroundColor: colors.type[detectedType.toLowerCase()] || colors.text.primary },
-                  ]}
-                />
-                <Text style={textStyles.mono_sm}>{detectedType}</Text>
-              </View>
-
-              <TouchableOpacity
-                style={[
-                  styles.saveButton,
-                  (isLoading || (!text.trim() && !selectedFile)) && styles.saveButtonDisabled,
-                ]}
-                onPress={handleSave}
-                disabled={isLoading || (!text.trim() && !selectedFile)}
-              >
-                <Text style={styles.saveButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </SafeAreaView>
-      </View>
-    </Modal>
+              <Text style={s.capLabel}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </Animated.View>
+    </>
   );
-});
+};
 
-const styles = StyleSheet.create({
+const s = StyleSheet.create({
   overlay: {
-    flex: 1,
-    justifyContent: 'flex-end',
-  },
-  backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.65)',
+    zIndex: 80,
   },
-  sheetBackground: {
-    backgroundColor: colors.bg.secondary,
-    borderTopLeftRadius: radius.lg,
-    borderTopRightRadius: radius.lg,
-    minHeight: '50%',
-    maxHeight: '90%',
+  sheet: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: '#141312',
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
+    borderTopWidth: 0.5,
+    borderTopColor: C.borderMedium,
+    paddingHorizontal: 22,
+    paddingTop: 14,
+    paddingBottom: 52,
+    zIndex: 90,
   },
-  handleIndicator: {
-    backgroundColor: colors.border.strong,
-    width: 40,
-    height: 4,
+  handle: {
+    width: 32,
+    height: 3,
+    backgroundColor: '#282624',
     borderRadius: 2,
     alignSelf: 'center',
-    marginTop: spacing.sm,
-    marginBottom: spacing.xs,
+    marginBottom: 18,
   },
-  container: {
-    flex: 1,
-    padding: spacing.md,
+  label: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 9,
+    color: C.textDarker,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 14,
   },
-  input: {
-    ...textStyles.body,
-    color: colors.text.primary,
-    flex: 1,
-    textAlignVertical: 'top',
-    padding: 0,
-  },
-  filePreview: {
-    padding: spacing.sm,
-    backgroundColor: colors.bg.tertiary,
-    borderRadius: radius.sm,
-    marginBottom: spacing.md,
-  },
-  actionsRow: {
+  grid: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  capBtn: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: C.elevated,
+    borderWidth: 0.5,
+    borderColor: C.borderMedium,
+    borderRadius: 18,
+    paddingVertical: 20,
+    paddingHorizontal: 14,
     alignItems: 'center',
-    paddingTop: spacing.sm,
-    borderTopWidth: 1,
-    borderTopColor: colors.border.subtle,
+    gap: 10,
   },
-  mediaActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  capIcon: {
+    opacity: 0.9,
   },
-  iconButton: {
-    padding: spacing.xs,
-    marginRight: spacing.xs,
-  },
-  typeIndicator: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginHorizontal: spacing.xs,
-  },
-  saveButton: {
-    backgroundColor: colors.accent.primary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.full,
-  },
-  saveButtonDisabled: {
-    opacity: 0.5,
-  },
-  saveButtonText: {
-    ...textStyles.mono_md,
-    color: colors.text.inverse,
+  capLabel: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 10,
+    color: '#6A6764',
+    letterSpacing: 0.5,
   },
 });

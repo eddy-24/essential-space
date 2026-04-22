@@ -1,167 +1,468 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, SafeAreaView, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  View, Text, TextInput, TouchableOpacity, ScrollView,
+  StyleSheet, KeyboardAvoidingView, Platform, Alert
+} from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import { itemsApi } from '../services/api/itemsApi';
+import { C } from '../design/colors';
+import { DotGrid } from '../components/DotGrid';
+import { IcBack, IcLink, IcCheck } from '../components/Icons';
+
+const TOOLBAR = ['H1', 'H2', 'B', 'I', '—', '☑', 'link'];
 
 const getBlockStyle = (type) => {
   switch (type) {
-    case 'h1': return { fontSize: 20, fontWeight: 'bold', color: '#e0e0e0', marginVertical: 8 };
-    case 'h2': return { fontSize: 16, fontWeight: 'bold', color: '#e0e0e0', marginVertical: 6 };
-    case 'bullet': return { fontSize: 14, color: '#f0f0f0', marginVertical: 4 };
-    case 'checkbox': return { fontSize: 14, color: '#f0f0f0', marginVertical: 4 };
-    case 'paragraph':
-    default: return { fontSize: 14, color: '#f0f0f0', marginVertical: 4 };
+    case 'h1':       return { fontSize: 20, fontFamily: 'DMSansMedium', color: C.textPrimary };
+    case 'h2':       return { fontSize: 16, fontFamily: 'DMSansMedium', color: C.textPrimary };
+    case 'bullet':   return { fontSize: 15, fontFamily: 'DMSansRegular', color: C.textSec };
+    case 'checkbox': return { fontSize: 15, fontFamily: 'DMSansRegular', color: C.textSec };
+    default:         return { fontSize: 15, fontFamily: 'DMSansRegular', color: C.textSec };
   }
 };
 
 export default function NoteEditorScreen() {
   const route = useRoute();
   const nav = useNavigation();
-  const { noteId } = route.params || {};
+  const insets = useSafeAreaInsets();
+  const { noteId, linkedItemId } = route.params || {};
+  const inputRefs = useRef([]);
 
   const [title, setTitle] = useState('');
   const [blocks, setBlocks] = useState([{ type: 'paragraph', text: '' }]);
-  const [focusedIndex, setFocusedIndex] = useState(0);
-  const [linkedItemId, setLinkedItemId] = useState(null);
+  const [focusedIdx, setFocusedIdx] = useState(0);
+  const [linkedItem, setLinkedItem] = useState(null);
   const [aiTags, setAiTags] = useState([]);
   const [confirmedTags, setConfirmedTags] = useState([]);
 
   useEffect(() => {
-    if (noteId) {
-      itemsApi.getItem(noteId).then(item => {
-        setTitle(item.title || '');
-        if (item.richContent?.blocks?.length) setBlocks(item.richContent.blocks);
-        else if (item.content) setBlocks([{ type: 'paragraph', text: item.content }]);
-        setAiTags(item.aiTags || []);
-        setConfirmedTags(item.tags || []);
-        setLinkedItemId(item.linkedItemId);
-      }).catch(()=>{});
-    }
+    if (!noteId) return;
+    itemsApi.getItem(noteId).then(item => {
+      setTitle(item.title || '');
+      if (item.richContent?.blocks?.length) setBlocks(item.richContent.blocks);
+      else if (item.content) setBlocks([{ type: 'paragraph', text: item.content }]);
+      setAiTags(item.aiTags || []);
+      setConfirmedTags(item.tags || item.aiTags || []);
+      if (item.linkedItemId) {
+        itemsApi.getItem(item.linkedItemId).then(setLinkedItem).catch(() => {});
+      }
+    }).catch((err) => {
+      Alert.alert('Error', err?.message || 'Could not load note.');
+    });
   }, [noteId]);
 
-  const saveNote = async () => {
+  useEffect(() => {
+    if (noteId || !linkedItemId) return;
+    itemsApi.getItem(linkedItemId).then(setLinkedItem).catch(() => {});
+  }, [linkedItemId, noteId]);
+
+  const save = async () => {
     const payload = {
       type: 'NOTE',
       title,
       content: blocks.map(b => b.text).join('\n'),
       richContent: { version: 1, blocks },
-      linkedItemId,
-      tags: confirmedTags
+      linkedItemId: linkedItem?.id,
+      tags: confirmedTags,
     };
-    if (noteId) await itemsApi.updateItem(noteId, payload);
-    else await itemsApi.createItem(payload);
-    nav.goBack();
+    try {
+      if (noteId) await itemsApi.updateItem(noteId, payload);
+      else await itemsApi.createItem(payload);
+      nav.goBack();
+    } catch (err) {
+      Alert.alert('Error', err?.message || 'Could not save note. Check backend connection.');
+    }
+  };
+
+  const applyBlock = (type) => {
+    setBlocks(prev => {
+      const nb = [...prev];
+      nb[focusedIdx] = { ...nb[focusedIdx], type };
+      return nb;
+    });
   };
 
   const handleKeyPress = (e, idx) => {
     if (e.nativeEvent.key === 'Enter') {
-      const newB = [...blocks];
-      newB.splice(idx + 1, 0, { type: 'paragraph', text: '' });
-      setBlocks(newB);
-      setFocusedIndex(idx + 1);
+      const nb = [...blocks];
+      nb.splice(idx + 1, 0, { type: 'paragraph', text: '' });
+      setBlocks(nb);
+      setFocusedIdx(idx + 1);
+      setTimeout(() => inputRefs.current[idx + 1]?.focus(), 50);
     } else if (e.nativeEvent.key === 'Backspace' && blocks[idx].text === '' && idx > 0) {
-      const newB = [...blocks];
-      newB.splice(idx, 1);
-      setBlocks(newB);
-      setFocusedIndex(idx - 1);
+      const nb = [...blocks];
+      nb.splice(idx, 1);
+      setBlocks(nb);
+      setFocusedIdx(idx - 1);
+      setTimeout(() => inputRefs.current[idx - 1]?.focus(), 50);
     }
   };
 
+  const toggleCheck = (idx) => {
+    setBlocks(prev => prev.map((b, i) => i === idx ? { ...b, checked: !b.checked } : b));
+  };
+
+  const toggleTag = (tag) => {
+    setConfirmedTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
+  };
+
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => nav.goBack()}><Text style={styles.headerBtn}>cancel</Text></TouchableOpacity>
-        <Text style={styles.headerTitle}>{noteId ? 'edit note' : 'new note'}</Text>
-        <TouchableOpacity onPress={saveNote}><Text style={[styles.headerBtn, {color: '#f0f0f0'}]}>save</Text></TouchableOpacity>
+    <View style={s.screen}>
+      <DotGrid />
+      <View style={[s.header, { paddingTop: Math.max(insets.top, 14) }]}>
+        <TouchableOpacity style={s.backBtn} onPress={() => nav.goBack()}>
+          <IcBack />
+          <Text style={s.backText}>back</Text>
+        </TouchableOpacity>
+        <TouchableOpacity onPress={save}>
+          <Text style={s.saveText}>save</Text>
+        </TouchableOpacity>
       </View>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-        <ScrollView style={styles.editor}>
-          <TextInput style={styles.titleInput} placeholder="Title" placeholderTextColor="#444" value={title} onChangeText={setTitle} />
-          
-          <TouchableOpacity style={styles.attachPicker} onPress={() => setLinkedItemId('fake-uuid')}>
-             <View style={[styles.attachDot, { backgroundColor: linkedItemId ? '#c080e0' : '#444' }]} />
-             <Text style={styles.attachText}>{linkedItemId ? 'Attached Item' : 'Attach to...'}</Text>
-          </TouchableOpacity>
 
-          <View style={styles.tagsArea}>
-            {confirmedTags.map(t => (
-              <TouchableOpacity key={`c-${t}`} onPress={() => setConfirmedTags(confirmedTags.filter(x => x!==t))} style={styles.confirmedChip}>
-                <Text style={styles.confirmedChipText}>{t}</Text>
-              </TouchableOpacity>
-            ))}
-            {aiTags.filter(t => !confirmedTags.includes(t)).map(t => (
-              <TouchableOpacity key={`ai-${t}`} onPress={() => setConfirmedTags([...confirmedTags, t])} style={styles.aiChip}>
-                <Text style={styles.aiChipText}>{t}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        {/* Toolbar */}
+        <ScrollView
+          horizontal
+          style={s.toolbar}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.toolbarContent}
+          keyboardShouldPersistTaps="always"
+        >
+          {TOOLBAR.map(btn => (
+            <TouchableOpacity
+              key={btn}
+              style={s.tb}
+              onPress={() => {
+                const map = { H1: 'h1', H2: 'h2', '☑': 'checkbox', '—': 'bullet' };
+                if (map[btn]) applyBlock(map[btn]);
+              }}
+            >
+              <Text style={s.tbText}>{btn}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
-          <View style={styles.blocks}>
-            {blocks.map((b, i) => (
-              <View key={i} style={styles.blockRow}>
-                {b.type === 'bullet' && <Text style={styles.bullet}>•</Text>}
-                {b.type === 'checkbox' && (
-                  <TouchableOpacity style={styles.checkOuter} onPress={() => {
-                    const nb = [...blocks]; nb[i].checked = !nb[i].checked; setBlocks(nb);
-                  }}>
-                    {b.checked && <View style={styles.checkInner} />}
+        <ScrollView
+          style={s.editorScroll}
+          contentContainerStyle={[s.editorContent, s.editorContentGrow]}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={s.editorCard}>
+            <Text style={s.editorLabel}>note</Text>
+
+            <TextInput
+              style={s.titleInput}
+              placeholder="Note title..."
+              placeholderTextColor={C.textMuted}
+              value={title}
+              onChangeText={setTitle}
+              selectionColor={C.textPrimary}
+              autoFocus={!noteId}
+            />
+
+            {!noteId && title.length === 0 && blocks.every(block => !block.text) && (
+              <View style={s.emptyHint}>
+                <Text style={s.emptyHintLabel}>quick note</Text>
+                <Text style={s.emptyHintText}>scrie titlul sau incepe direct in primul bloc.</Text>
+              </View>
+            )}
+
+            {/* Blocks */}
+            {blocks.map((block, idx) => (
+              <View key={idx} style={s.blockRow}>
+                {block.type === 'bullet' && (
+                  <Text style={s.bulletDash}>—</Text>
+                )}
+                {block.type === 'checkbox' && (
+                  <TouchableOpacity
+                    style={[s.checkbox, block.checked && s.checkboxDone]}
+                    onPress={() => toggleCheck(idx)}
+                  >
+                    {block.checked && <IcCheck size={10} />}
                   </TouchableOpacity>
                 )}
                 <TextInput
-                  style={[styles.blockInput, getBlockStyle(b.type)]}
-                  placeholder={i === 0 ? "Write something..." : ""}
-                  placeholderTextColor="#444"
-                  value={b.text}
-                  onChangeText={txt => { const nb = [...blocks]; nb[i].text = txt; setBlocks(nb); }}
-                  onFocus={() => setFocusedIndex(i)}
-                  onKeyPress={e => handleKeyPress(e, i)}
-                  multiline={b.type === 'paragraph'}
-                  autoFocus={i === blocks.length - 1 && !noteId}
+                  ref={el => { inputRefs.current[idx] = el; }}
+                  style={[s.blockInput, getBlockStyle(block.type),
+                    block.checked && { textDecorationLine: 'line-through', color: C.textDark }]}
+                  value={block.text}
+                  onChangeText={txt => {
+                    setBlocks(prev => prev.map((b, i) => i === idx ? { ...b, text: txt } : b));
+                  }}
+                  onFocus={() => setFocusedIdx(idx)}
+                  onKeyPress={e => handleKeyPress(e, idx)}
+                  multiline
+                  placeholder={idx === 0 && !noteId ? 'Start writing...' : 'Continue writing...'}
+                  placeholderTextColor={C.textMuted}
+                  selectionColor={C.textPrimary}
                 />
               </View>
             ))}
           </View>
+
+          {/* Linked item */}
+          {linkedItem && (
+            <View style={s.section}>
+              <Text style={s.sectionLabel}>attached to</Text>
+              <View style={s.attachedPill}>
+                <IcLink c="#5ab4f0" size={12} />
+                <Text style={s.attachedText}>{linkedItem.title || 'Linked item'}</Text>
+              </View>
+            </View>
+          )}
+
+          {/* AI tag hints */}
+          {(aiTags.length > 0 || confirmedTags.length > 0) && (
+            <View style={s.section}>
+              <Text style={s.sectionLabel}>ai tag hints</Text>
+              <View style={s.tagsRow}>
+                {[...new Set([...confirmedTags, ...aiTags])].map(tag => (
+                  <TouchableOpacity
+                    key={tag}
+                    style={[s.hintChip, confirmedTags.includes(tag) && s.hintChipActive]}
+                    onPress={() => toggleTag(tag)}
+                  >
+                    <Text style={[s.hintChipText, confirmedTags.includes(tag) && s.hintChipTextActive]}>
+                      {tag}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+          )}
+
+          {/* Clickable empty space to focus last block */}
+          <TouchableOpacity 
+            style={{ height: 400 }} 
+            activeOpacity={1} 
+            onPress={() => {
+              const lastIdx = blocks.length - 1;
+              if (inputRefs.current[lastIdx]) {
+                inputRefs.current[lastIdx].focus();
+              }
+            }} 
+          />
         </ScrollView>
-        <View style={styles.toolbar}>
-          {['h1', 'h2', 'bullet', 'checkbox'].map(t => (
-            <TouchableOpacity key={t} style={styles.toolBtn} onPress={() => { const nb = [...blocks]; nb[focusedIndex].type = t; setBlocks(nb); }}>
-              <Text style={styles.toolBtnText}>{t}</Text>
-            </TouchableOpacity>
-          ))}
-          <TouchableOpacity style={styles.toolBtn} onPress={() => { const nb = [...blocks]; nb[focusedIndex].text += '**bold**'; setBlocks(nb); }}>
-              <Text style={styles.toolBtnText}>B</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.toolBtn} onPress={() => { const nb = [...blocks]; nb[focusedIndex].text += '_italic_'; setBlocks(nb); }}>
-              <Text style={styles.toolBtnText}>I</Text>
-          </TouchableOpacity>
-        </View>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#0a0a0a' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: '#1e1e1e' },
-  headerTitle: { fontFamily: 'DM Mono', fontSize: 11, color: '#888' },
-  headerBtn: { fontFamily: 'DM Mono', fontSize: 11, color: '#666' },
-  editor: { padding: 16 },
-  titleInput: { fontFamily: 'DM Sans', fontSize: 24, fontWeight: 'bold', color: '#f0f0f0', marginBottom: 12 },
-  attachPicker: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#141414', padding: 8, borderRadius: 4, marginBottom: 12 },
-  attachDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
-  attachText: { fontFamily: 'DM Mono', fontSize: 10, color: '#888' },
-  tagsArea: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
-  confirmedChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, backgroundColor: '#222', borderWidth: 1, borderColor: '#888' },
-  confirmedChipText: { fontFamily: 'DM Mono', fontSize: 8, color: '#e0e0e0' },
-  aiChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 0.5, borderColor: '#333', borderStyle: 'dashed' },
-  aiChipText: { fontFamily: 'DM Mono', fontSize: 8, color: '#444' },
-  blocks: { paddingBottom: 100 },
-  blockRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  bullet: { color: '#888', fontSize: 14, marginRight: 8, marginTop: 4 },
-  checkOuter: { width: 14, height: 14, borderWidth: 1, borderColor: '#666', borderRadius: 2, marginRight: 8, marginTop: 8, justifyContent: 'center', alignItems: 'center' },
-  checkInner: { width: 8, height: 8, backgroundColor: '#f0f0f0', borderRadius: 1 },
-  blockInput: { flex: 1, fontFamily: 'DM Sans' },
-  toolbar: { flexDirection: 'row', justifyContent: 'space-around', padding: 8, backgroundColor: '#0d0d0d', borderTopWidth: 1, borderTopColor: '#1e1e1e' },
-  toolBtn: { paddingHorizontal: 8, paddingVertical: 4, borderWidth: 0.5, borderColor: '#222', borderRadius: 3, backgroundColor: '#141414' },
-  toolBtnText: { fontFamily: 'DM Mono', fontSize: 7, color: '#666' }
+const s = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: C.bg,
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 22,
+    paddingVertical: 14,
+    backgroundColor: 'rgba(13,12,11,0.96)',
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.borderSubtle,
+    zIndex: 10,
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+  },
+  backText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 10,
+    color: C.textMuted,
+  },
+  saveText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 11,
+    color: C.textPrimary,
+  },
+  toolbar: {
+    borderBottomWidth: 0.5,
+    borderBottomColor: C.borderSubtle,
+    flexShrink: 0,
+  },
+  toolbarContent: {
+    paddingHorizontal: 22,
+    paddingVertical: 12,
+    gap: 4,
+  },
+  tb: {
+    borderWidth: 0.5,
+    borderColor: C.borderDefault,
+    borderRadius: 6,
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+  },
+  tbText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 10,
+    color: C.textDim,
+  },
+  editorScroll: {
+    flex: 1,
+  },
+  editorContent: {
+    paddingHorizontal: 22,
+    paddingTop: 18,
+    paddingBottom: 80,
+  },
+  editorContentGrow: {
+    flexGrow: 1,
+  },
+  editorCard: {
+    backgroundColor: C.card,
+    borderWidth: 0.5,
+    borderColor: C.borderMedium,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingTop: 16,
+    paddingBottom: 18,
+  },
+  editorLabel: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 9,
+    color: C.textMuted,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 12,
+  },
+  titleInput: {
+    fontFamily: 'DMSansMedium',
+    fontSize: 22,
+    color: C.textPrimary,
+    letterSpacing: -0.4,
+    marginBottom: 14,
+    minHeight: 32,
+    padding: 0,
+  },
+  emptyHint: {
+    marginBottom: 14,
+    borderWidth: 0.5,
+    borderColor: C.borderMedium,
+    borderRadius: 14,
+    backgroundColor: C.elevated,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  emptyHintLabel: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 9,
+    color: C.textMuted,
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  emptyHintText: {
+    fontFamily: 'DMSansRegular',
+    fontSize: 14,
+    color: C.textSec,
+    lineHeight: 20,
+  },
+  blockRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    paddingVertical: 8,
+    minHeight: 42,
+    borderTopWidth: 0.5,
+    borderTopColor: C.borderSubtle,
+  },
+  bulletDash: {
+    color: C.textDark,
+    flexShrink: 0,
+    marginTop: 1,
+    fontSize: 11,
+    fontFamily: 'DMMonoRegular',
+    marginRight: 10,
+    lineHeight: 21,
+  },
+  checkbox: {
+    width: 16,
+    height: 16,
+    borderRadius: 4,
+    borderWidth: 0.5,
+    borderColor: C.textDark,
+    flexShrink: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
+    marginTop: 3,
+  },
+  checkboxDone: {
+    backgroundColor: C.textPrimary,
+    borderColor: C.textPrimary,
+  },
+  blockInput: {
+    flex: 1,
+    lineHeight: 21,
+    minHeight: 24,
+    padding: 0,
+  },
+  section: {
+    marginTop: 18,
+    paddingTop: 16,
+    borderTopWidth: 0.5,
+    borderTopColor: C.borderSubtle,
+  },
+  sectionLabel: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 8,
+    color: C.textGhost,
+    letterSpacing: 1,
+    textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  attachedPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: C.elevated,
+    borderWidth: 0.5,
+    borderColor: C.borderMedium,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  attachedText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 10,
+    color: '#6A6764',
+  },
+  tagsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 5,
+  },
+  hintChip: {
+    borderWidth: 0.5,
+    borderStyle: 'dashed',
+    borderColor: '#222',
+    borderRadius: 8,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+  },
+  hintChipActive: {
+    borderStyle: 'solid',
+    borderColor: C.borderStrong,
+    backgroundColor: C.elevated,
+  },
+  hintChipText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 8,
+    color: C.textDark,
+  },
+  hintChipTextActive: {
+    color: C.textDim,
+  },
 });

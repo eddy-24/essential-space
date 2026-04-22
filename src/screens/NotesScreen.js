@@ -1,64 +1,135 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, SafeAreaView } from 'react-native';
-import { useNavigation, useFocusEffect } from '@react-navigation/native';
+import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { itemsApi } from '../services/api/itemsApi';
+import { C } from '../design/colors';
+import { FeedCard } from '../components/FeedCard';
 
-export default function NotesScreen() {
+export default function NotesScreen({ navigate }) {
   const [notes, setNotes] = useState([]);
-  const nav = useNavigation();
+  const [refreshing, setRefreshing] = useState(false);
+
+  const [error, setError] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setError(false);
+    try {
+      const data = await itemsApi.getAllItems({ type: 'NOTE' });
+      setNotes(data.sort((a, b) => {
+        const da = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+        const db = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+        return db - da;
+      }));
+    } catch { setError(true); }
+    finally { setLoading(false); }
+  };
 
   useFocusEffect(useCallback(() => {
-    itemsApi.getAllItems({ type: 'NOTE' }).then(data => {
-      setNotes(data.sort((a,b) => new Date(b.createdAt) - new Date(a.createdAt)));
-    }).catch(() => {});
+    setLoading(true);
+    load();
   }, []));
 
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await load();
+    setRefreshing(false);
+  };
+
   return (
-    <SafeAreaView style={styles.screen}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>notes</Text>
+    <ScrollView
+      style={s.scroll}
+      contentContainerStyle={s.content}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={C.textDim} />
+      }
+    >
+      <View style={s.titleWrap}>
+        <Text style={s.title}>notes</Text>
+        <Text style={s.sub}>{notes.length} {notes.length === 1 ? 'note' : 'notes'}</Text>
       </View>
-      <FlatList
-        data={notes}
-        keyExtractor={i => i.id.toString()}
-        contentContainerStyle={styles.list}
-        renderItem={({item}) => (
-          <TouchableOpacity style={styles.card} onPress={() => nav.navigate('NoteEditor', { noteId: item.id })}>
-            <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle} numberOfLines={1}>{item.title || 'Untitled Note'}</Text>
-              {item.linkedItemId && <View style={styles.attachDot} />}
-            </View>
-            <Text style={styles.previewText} numberOfLines={2}>{item.content || '...'}</Text>
-            <View style={styles.tagsContainer}>
-              {(item.aiTags || []).map((t, i) => (
-                <View key={i} style={styles.dashedChip}>
-                  <Text style={styles.dashedChipText}>{t}</Text>
-                </View>
-              ))}
-            </View>
+
+      {loading && !refreshing && (
+        <View style={s.stateBox}>
+          <ActivityIndicator color={C.textPrimary} />
+          <Text style={s.stateText}>incarc notitele...</Text>
+        </View>
+      )}
+
+      {!loading && notes.map(item => (
+        <FeedCard
+          key={item.id}
+          item={item}
+          onPress={() => navigate('NoteEditor', { noteId: item.id })}
+        />
+      ))}
+
+      {error && !loading && (
+        <View style={s.stateBox}>
+          <Text style={s.stateText}>nu pot incarca notitele din backend</Text>
+          <TouchableOpacity onPress={() => { setLoading(true); load(); }} style={s.retryBtn}>
+            <Text style={s.retryText}>incearca din nou</Text>
           </TouchableOpacity>
-        )}
-      />
-      <TouchableOpacity style={styles.fab} onPress={() => nav.navigate('NoteEditor')}>
-        <Text style={styles.fabIcon}>+</Text>
-      </TouchableOpacity>
-    </SafeAreaView>
+        </View>
+      )}
+
+      {!error && !loading && notes.length === 0 && (
+        <View style={s.stateBox}>
+          <Text style={s.stateText}>nu exista note in backend inca</Text>
+        </View>
+      )}
+
+      <View style={s.footerGap} />
+    </ScrollView>
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: '#0a0a0a' },
-  header: { padding: 16, borderBottomWidth: 1, borderBottomColor: '#1e1e1e' },
-  headerTitle: { fontFamily: 'DM Mono', fontSize: 11, color: '#f0f0f0' },
-  list: { padding: 16, paddingBottom: 80 },
-  card: { backgroundColor: '#141414', padding: 12, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: '#1e1e1e' },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  cardTitle: { fontFamily: 'DM Sans', fontSize: 12, color: '#e0e0e0', flex: 1 },
-  attachDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#c080e0' },
-  previewText: { fontFamily: 'DM Sans', fontSize: 10, color: '#555', marginBottom: 8, lineHeight: 14 },
-  tagsContainer: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
-  dashedChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4, borderWidth: 0.5, borderColor: '#333', borderStyle: 'dashed' },
-  dashedChipText: { fontFamily: 'DM Mono', fontSize: 8, color: '#444' },
-  fab: { position: 'absolute', bottom: 24, right: 24, width: 28, height: 28, borderRadius: 14, backgroundColor: '#f0f0f0', justifyContent: 'center', alignItems: 'center' },
-  fabIcon: { fontSize: 18, color: '#0a0a0a', marginTop: -2 }
+const s = StyleSheet.create({
+  scroll: { flex: 1 },
+  content: { paddingHorizontal: 20, paddingTop: 20 },
+  titleWrap: { marginBottom: 24 },
+  title: {
+    fontFamily: 'DMSansBold',
+    fontSize: 26,
+    color: C.textPrimary,
+    letterSpacing: -0.5,
+    marginBottom: 6,
+  },
+  sub: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 10,
+    color: C.textMuted,
+    letterSpacing: 0.6,
+  },
+  stateBox: {
+    marginTop: 40,
+    alignItems: 'center',
+    backgroundColor: C.card,
+    borderWidth: 1,
+    borderColor: C.borderMedium,
+    borderRadius: 18,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
+  },
+  stateText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 11,
+    color: C.textSec,
+    letterSpacing: 0.5,
+  },
+  retryBtn: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: C.borderStrong,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  retryText: {
+    fontFamily: 'DMMonoRegular',
+    fontSize: 10,
+    color: C.textPrimary,
+  },
+  footerGap: { height: 100 },
 });

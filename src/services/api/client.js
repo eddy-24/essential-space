@@ -1,6 +1,32 @@
 import axios from 'axios';
+import { NativeModules, Platform } from 'react-native';
 
-export const API_HOST = 'http://192.168.0.195:8080';
+const DEFAULT_DEV_HOST = Platform.OS === 'android' ? '10.0.2.2' : '192.168.0.195'; // Changed from 'localhost' to your Mac's IP
+
+const getApiHost = () => {
+  const scriptURL = NativeModules.SourceCode?.scriptURL;
+
+  if (__DEV__ && scriptURL) {
+    try {
+      const bundleURL = new URL(scriptURL);
+      let host = bundleURL.hostname;
+      
+      // If Metro is running on localhost but we're on a physical iOS device,
+      // 'localhost' will point to the iPhone itself. We need to force the Mac's IP.
+      if (host === 'localhost' && Platform.OS === 'ios') {
+        host = '192.168.0.195';
+      }
+      
+      return `${bundleURL.protocol}//${host}:8080`;
+    } catch {
+      // Fall back to the platform default when Metro's URL is unavailable.
+    }
+  }
+
+  return `http://${DEFAULT_DEV_HOST}:8080`;
+};
+
+export const API_HOST = getApiHost();
 const BASE_URL = `${API_HOST}/api`;
 
 const apiClient = axios.create({
