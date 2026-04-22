@@ -48,7 +48,7 @@ const ScreenshotDetailScreen = () => {
     // Navigate to NoteEditorScreen with linkedItemId
     // Using a different tab requires navigation routing structure access. 
     // Usually handled by navigating to the Notes stack.
-    navigation.navigate('Notes', {
+    navigation.navigate('notes', {
       screen: 'NoteEditor',
       params: { linkedItemId: item.id }
     });
