@@ -88,11 +88,6 @@ export default function SettingsScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      {/* Top app bar */}
-      <View style={styles.topBar}>
-        <Text style={styles.topBarTitle}>ESSENTIAL</Text>
-      </View>
-
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -190,22 +185,6 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     backgroundColor: '#131313',
-  },
-
-  // Top bar
-  topBar: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 56,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: '#000000',
-  },
-  topBarTitle: {
-    fontFamily: 'DMMonoMedium',
-    fontSize: 17,
-    letterSpacing: -0.5,
-    color: '#ffffff',
   },
 
   // Scroll

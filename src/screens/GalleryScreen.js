@@ -117,11 +117,6 @@ export default function GalleryScreen() {
 
   return (
     <SafeAreaView style={styles.screen}>
-      {/* Top app bar */}
-      <View style={styles.topBar}>
-        <Text style={styles.topBarTitle}>ESSENTIAL</Text>
-      </View>
-
       {/* Search bar */}
       <View style={styles.searchBar}>
         <View style={styles.searchInputRow}>
@@ -192,22 +187,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#131313',
   },
 
-  // Top bar
-  topBar: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    height: 56,
-    borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.2)',
-    backgroundColor: '#000000',
-  },
-  topBarTitle: {
-    fontFamily: 'DMMonoMedium',
-    fontSize: 17,
-    letterSpacing: -0.5,
-    color: '#ffffff',
-  },
   searchHandle: {
     width: 6,
     height: 1.5,
