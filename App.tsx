@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, StyleSheet } from 'react-native';
-import { RootNavigator } from './src/navigation/index';
+import RootNavigator from './src/navigation/index';
 
 export default function App() {
   return (

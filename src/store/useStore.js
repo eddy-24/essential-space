@@ -1,27 +1,25 @@
 import { create } from 'zustand';
-import { itemsApi } from '../services/api/itemsApi';
-import { collectionsApi } from '../services/api/collectionsApi';
+import { screenshotsApi } from '../services/api/screenshotsApi';
 
-export const useStore = create((set, get) => ({
-  items: [],
-  collections: [],
+export const useStore = create((set) => ({
+  screenshots: [],
   isLoading: false,
   error: null,
 
-  fetchItems: async (filters = {}) => {
+  fetchScreenshots: async (params = {}) => {
     set({ isLoading: true, error: null });
     try {
-      const data = await itemsApi.getAllItems(filters);
-      set({ items: data, isLoading: false });
+      const data = await screenshotsApi.getScreenshots(params);
+      set({ screenshots: data, isLoading: false });
     } catch (err) {
       set({ error: err.message, isLoading: false });
     }
   },
 
-  createItem: async (data) => {
+  uploadScreenshot: async (file) => {
     try {
-      const newItem = await itemsApi.createItem(data);
-      set((state) => ({ items: [newItem, ...state.items] }));
+      const newItem = await screenshotsApi.uploadScreenshot(file);
+      set((state) => ({ screenshots: [newItem, ...state.screenshots] }));
       return newItem;
     } catch (err) {
       set({ error: err.message });
@@ -29,49 +27,15 @@ export const useStore = create((set, get) => ({
     }
   },
 
-  uploadItem: async (file, type, note) => {
+  deleteScreenshot: async (id) => {
     try {
-      const newItem = await itemsApi.uploadItem(file, type, note);
-      set((state) => ({ items: [newItem, ...state.items] }));
-      return newItem;
-    } catch (err) {
-      set({ error: err.message });
-      throw err;
-    }
-  },
-
-  updateItem: async (id, data) => {
-    try {
-      const updatedItem = await itemsApi.updateItem(id, data);
+      await screenshotsApi.deleteScreenshot(id);
       set((state) => ({
-        items: state.items.map((item) => (item.id === id ? updatedItem : item)),
-      }));
-      return updatedItem;
-    } catch (err) {
-      set({ error: err.message });
-      throw err;
-    }
-  },
-
-  deleteItem: async (id) => {
-    try {
-      await itemsApi.deleteItem(id);
-      set((state) => ({
-        items: state.items.filter((item) => item.id !== id),
+        screenshots: state.screenshots.filter((s) => s.id !== id),
       }));
     } catch (err) {
       set({ error: err.message });
       throw err;
-    }
-  },
-
-  fetchCollections: async () => {
-    set({ isLoading: true, error: null });
-    try {
-      const data = await collectionsApi.getAllCollections();
-      set({ collections: data, isLoading: false });
-    } catch (err) {
-      set({ error: err.message, isLoading: false });
     }
   },
 }));
